@@ -276,9 +276,9 @@ db.commit()
 
 ########################################################################################################################
 
-# create delta that of new data
+# create delta of new data
 
-# *** NOTE! - for this to work properly a the base set must have already be run
+# *** NOTE! - for this to work properly the base set must have already been run
 print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating results delta..")
 
 SQL_statement = """CREATE TABLE racing_data.t_race_results_delta AS
