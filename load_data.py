@@ -543,4 +543,386 @@ SQL_statement = """OPTIMIZE TABLE racing_data.p_race_results_1"""
 cursor.execute(SQL_statement)
 db.commit()
 
+########################################################################################################################
+
+# create jockey stats
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating jockey stats..")
+
+# drop old jockey stats table
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_jockey_stats"""
+cursor.execute(SQL_statement)
+db.commit()
+
+SQL_statement = """CREATE TABLE racing_data.p_jockey_stats AS
+SELECT A.*, B.WinCountL10, B.WinPercentL10, B.NumberOfRidesL10
+FROM (
+# win percentage all available races races
+         SELECT *
+         FROM (
+                  SELECT JockeyId
+                       , Jockey
+                       , SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) AS WinCountCareer
+                       , CASE
+                             WHEN SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) = 0 THEN 0
+                             ELSE (SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) / SUM(1)) * 100
+                      END                                                        AS WinPercentCareer
+                       , SUM(1)                                                  AS NumberOfRidesCareer
+                  FROM (
+                           SELECT *
+                           FROM (
+                                    SELECT *
+                                         , RANK() OVER (PARTITION BY
+                                        JockeyId
+                                        ORDER BY
+                                            CAST(MeetingDate AS DATE) DESC
+                                        ) RaceOrder
+                                    FROM (
+                                             SELECT JockeyId
+                                                  , Jockey
+                                                  , MeetingDate
+                                                  , MIN(Position) MinPositionForMeet
+                                             FROM racing_data.p_race_results_1
+                                             WHERE JockeyId > 0
+                                             GROUP BY JockeyId
+                                                    , Jockey
+                                                    , MeetingDate
+                                         ) X
+                                ) Y
+                       ) Z
+                  GROUP BY JockeyId
+                         , Jockey
+              ) AA
+         ORDER BY WinPercentCareer DESC
+     ) A
+         LEFT JOIN (
+# win percentage in last 10 races
+    SELECT *
+    FROM (
+             SELECT JockeyId
+                  , Jockey
+                  , SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) AS WinCountL10
+                  , CASE
+                        WHEN SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) = 0 THEN 0
+                        ELSE (SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) / SUM(1)) * 100
+                 END                                                        AS WinPercentL10
+                  , SUM(1)                                                  AS NumberOfRidesL10
+             FROM (
+                      SELECT *
+                      FROM (
+                               SELECT *
+                                    , RANK() OVER (PARTITION BY
+                                   JockeyId
+                                   ORDER BY
+                                       CAST(MeetingDate AS DATE) DESC
+                                   ) RaceOrder
+                               FROM (
+                                        SELECT JockeyId
+                                             , Jockey
+                                             , MeetingDate
+                                             , MIN(Position) MinPositionForMeet
+                                        FROM racing_data.p_race_results_1
+                                        WHERE JockeyId > 0
+                                        GROUP BY JockeyId
+                                               , Jockey
+                                               , MeetingDate
+                                    ) X
+                           ) Y
+                      WHERE RaceOrder <= 10
+                  ) Z
+             GROUP BY JockeyId
+                    , Jockey
+         ) AA
+    ORDER BY WinPercentL10 DESC
+) B ON A.JockeyId = B.JockeyId"""
+cursor.execute(SQL_statement)
+db.commit()
+
+SQL_statement = """OPTIMIZE TABLE racing_data.p_jockey_stats"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
+# create trainer stats
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating trainer stats..")
+
+# drop old trainer stats table
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_trainer_stats"""
+cursor.execute(SQL_statement)
+db.commit()
+
+SQL_statement = """CREATE TABLE racing_data.p_trainer_stats AS
+SELECT A.*, B.WinCountL10, B.WinPercentL10, B.NumberOfRidesL10
+FROM (
+         SELECT *
+         FROM (
+                  SELECT TrainerId
+                       , Trainer
+                       , SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) AS WinCountCareer
+                       , CASE
+                             WHEN SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) = 0
+                                 THEN 0
+                             ELSE (SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) / SUM(1)) * 100
+                      END                                                        AS WinPercentCareer
+                       , SUM(1)                                                  AS NumberOfRidesCareer
+                  FROM (
+                           SELECT *
+                           FROM (
+                                    SELECT *
+                                         , RANK()
+                                            OVER (PARTITION BY
+                                                TrainerId
+                                                ORDER BY
+                                                    CAST(MeetingDate AS DATE) DESC
+                                                ) RaceOrder
+                                    FROM (
+                                             SELECT TrainerId
+                                                  , Trainer
+                                                  , MeetingDate
+                                                  , Track
+                                                  , MIN(Position) MinPositionForMeet
+                                             FROM racing_data.p_race_results_1
+                                             GROUP BY TrainerId
+                                                    , Trainer
+                                                    , MeetingDate
+                                                    , Track
+                                             ORDER BY TrainerId ASC, MeetingDate DESC, Track
+                                         ) X
+                                ) Y
+                       ) Z
+                  GROUP BY TrainerId
+                         , Trainer
+              ) AA
+         ORDER BY WinPercentCareer DESC
+     ) A
+         LEFT JOIN (
+    SELECT *
+    FROM (
+             SELECT TrainerId
+                  , Trainer
+                  , SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) AS WinCountL10
+                  , CASE
+                        WHEN SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) = 0 THEN 0
+                        ELSE (SUM(CASE WHEN MinPositionForMeet = 1 THEN 1 ELSE 0 END) / SUM(1)) * 100
+                 END                                                        AS WinPercentL10
+                  , SUM(1)                                                  AS NumberOfRidesL10
+             FROM (
+                      SELECT *
+                      FROM (
+                               SELECT *
+                                    , RANK() OVER (PARTITION BY
+                                   TrainerId
+                                   ORDER BY
+                                       CAST(MeetingDate AS DATE) DESC
+                                   ) RaceOrder
+                               FROM (
+                                        SELECT TrainerId
+                                             , Trainer
+                                             , MeetingDate
+                                             , Track
+                                             , MIN(Position) MinPositionForMeet
+                                        FROM racing_data.p_race_results_1
+                                        GROUP BY TrainerId
+                                               , Trainer
+                                               , MeetingDate
+                                               , Track
+                                        ORDER BY TrainerId ASC, MeetingDate DESC, Track
+                                    ) X
+                           ) Y
+                      WHERE RaceOrder <= 10
+                  ) Z
+             GROUP BY TrainerId
+                    , Trainer
+         ) AA
+    ORDER BY WinPercentL10 DESC
+) B ON A.TrainerId = B.TrainerId"""
+cursor.execute(SQL_statement)
+db.commit()
+
+SQL_statement = """OPTIMIZE TABLE racing_data.p_trainer_stats"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
+# create par speeds table
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating par speeds..")
+
+# drop old track par speeds table
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_track_par_speeds"""
+cursor.execute(SQL_statement)
+db.commit()
+
+# re-create track par speeds table
+SQL_statement = """
+CREATE TABLE racing_data.p_track_par_speeds AS
+SELECT * FROM (
+    SELECT Track, Distance, Class, ROUND(AVG(AvgKMH),3) AS ParSpeed, ROUND(MAX(AvgKMH),3) AS FastestSpeed, ROUND(MAX(AvgKMH) - AVG(AvgKMH),3) AS FastestDistanceFromAvg FROM racing_data.p_race_results_1
+    WHERE AvgKMH <> 0
+    GROUP BY Track, Distance, Class
+    ) A
+WHERE ParSpeed < 100
+ORDER BY Track, Distance, Class
+"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
+# create race results with par speeds
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating race results with par speeds..")
+
+# drop old track par speeds table
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_race_results_2"""
+cursor.execute(SQL_statement)
+db.commit()
+
+# re-create race results 2 table
+SQL_statement = """
+CREATE TABLE racing_data.p_race_results_2 AS
+SELECT A.*, B.ParSpeed, B.FastestDistanceFromAvg, ROUND((AvgKMH - ParSpeed),3) AS DistanceFromParSpKMH, ROUND((AvgKMH - FastestSpeed),3) AS DistanceFromFastestSpKMH FROM racing_data.p_race_results_1 A LEFT JOIN racing_data.p_track_par_speeds B
+ON A.Track = B.Track AND A.Distance = B.Distance AND A.Class = B.Class
+"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
+# create list of horses and their current par speeds
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating horses and their current par speeds..")
+
+# drop old horse par speeds table
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_horse_speed_rating"""
+cursor.execute(SQL_statement)
+db.commit()
+
+# re-create horse par speeds table
+SQL_statement = """
+CREATE TABLE racing_data.p_horse_speed_rating AS
+SELECT HorseId, ROUND(AVG(DistanceFromParSpKMH),3) AS HorseAvgSpRating, ROUND(ROUND(AVG(DistanceFromParSpKMH),3) * ((SUM(1) * 0.2)) ,3) AS HorseAvgSpRating_1, SUM(1) AS NumOfRaces FROM (
+    SELECT *, RANK() OVER (PARTITION BY HorseId ORDER BY MeetingDate DESC, CAST(RaceNumber AS UNSIGNED ) DESC) AS RaceOrderSequence FROM racing_data.p_race_results_2
+    WHERE DistanceFromParSpKMH <= 3.5 AND DistanceFromParSpKMH >= -3.5
+) A
+WHERE RaceOrderSequence <= 5
+GROUP BY HorseId
+ORDER BY HorseAvgSpRating_1 DESC
+"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
+# create current next day model data
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating current 'next day' model data..")
+
+# drop old next day model data
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_model_data_temp"""
+cursor.execute(SQL_statement)
+db.commit()
+
+# re-create next day model data table
+SQL_statement = """
+CREATE TABLE racing_data.p_model_data_temp AS
+SELECT DISTINCT
+#MeetingDate,
+Track,
+RaceNumber,
+StartTime,
+Distance,
+AgeRestrictions,
+ClassRestrictions,
+WeightRestrictions,
+#RacePrizeMoney,
+SUBSTRING_INDEX(SUBSTRING_INDEX(RacePrizeMoney, ' ', 2), ' ', -1) AS RacePrizeMoneyTotal,
+SexRestrictions,
+WeightType,
+RaceName,
+JockeysCanClaim,
+A.HorseId,
+HorseName,
+HorseAge,
+HorseSex,
+#HorseSire,
+#HorseDam,
+HorseNumber,
+HorseJockey,
+HorseJockeyId,
+HorseBarrier,
+HorseTrainer,
+HorseTrainerId,
+HorseWeight,
+(HorseWeight - HorseClaim) AS HorseWeightAfterClaim,
+HorseLast10,
+LPAD(REPLACE(HorseLast10, 'x', '') ,10,0) AS HorseLast10_1,
+LENGTH(REPLACE(REPLACE(HorseLast10, 'x', ''),'0','')) AS HorseNumberOfRaces,
+CHAR_LENGTH(HorseLast10) - CHAR_LENGTH( REPLACE ( HorseLast10, '1', '') ) AS HorseNumberOfWinsL10,
+CASE WHEN (LENGTH(REPLACE(REPLACE(HorseLast10, 'x', ''),'0',''))) > 0 THEN
+     CASE WHEN (((CHAR_LENGTH(HorseLast10) - CHAR_LENGTH( REPLACE ( HorseLast10, '1', '') )) / LENGTH(REPLACE(REPLACE(HorseLast10, 'x', ''),'0',''))) * 100) IS NULL THEN 0.0000
+     ELSE (((CHAR_LENGTH(HorseLast10) - CHAR_LENGTH( REPLACE ( HorseLast10, '1', '') )) / LENGTH(REPLACE(REPLACE(HorseLast10, 'x', ''),'0',''))) * 100) END ELSE 0.0000
+END AS HorseNumberOfWinsPercentL10,
+CASE WHEN B.WinPercentL10 IS NULL THEN 0.0000 ELSE B.WinPercentL10 END AS JockeyWinPercentL10,
+CASE WHEN B.NumberOfRidesL10 IS NULL THEN 0 ELSE B.NumberOfRidesL10 END AS JockeyNumberOfRidesL10,
+CASE WHEN B.WinPercentCareer IS NULL THEN 0.0000 ELSE B.WinPercentCareer END AS JockeyWinPercentCareer,
+CASE WHEN B.NumberOfRidesCareer IS NULL THEN 0 ELSE B.NumberOfRidesCareer END AS JockeyNumberOfRidesCareer,
+CASE WHEN C.WinPercentL10 IS NULL THEN 0.0000 ELSE C.WinPercentL10 END AS TrainerWinPercentL10,
+CASE WHEN C.NumberOfRidesL10 IS NULL THEN 0 ELSE C.NumberOfRidesL10 END AS TrainerNumberOfRidesL10,
+CASE WHEN C.WinPercentCareer IS NULL THEN 0.0000 ELSE C.WinPercentCareer END AS TrainerWinPercentCareer,
+CASE WHEN C.NumberOfRidesCareer IS NULL THEN 0 ELSE C.NumberOfRidesCareer END AS TrainerNumberOfRidesCareer,
+CASE WHEN E.HorseAvgSpRating_1 IS NULL THEN 0 ELSE E.HorseAvgSpRating_1 END AS HorseAvgSpRating_1,
+CASE WHEN DATEDIFF(STR_TO_DATE(LEFT(StartTime,11),'%d-%b-%Y'), CAST(LastRaceDate AS DATE)) IS NULL THEN -1 ELSE DATEDIFF(STR_TO_DATE(LEFT(StartTime,11),'%d-%b-%Y'), CAST(LastRaceDate AS DATE)) END AS DaysSinceLastRace,
+LoadDate
+FROM racing_data.p_forms_future A
+    LEFT JOIN racing_data.p_jockey_stats B
+ON A.HorseJockeyId = B.JockeyId
+    LEFT JOIN racing_data.p_trainer_stats C
+ON A.HorseTrainerId = C.TrainerId
+    LEFT JOIN
+    (
+        SELECT HorseId, MAX(MeetingDate) AS LastRaceDate FROM racing_data.p_race_results_1
+        GROUP BY HorseId
+    ) D
+ON A.HorseId = D.HorseId
+    LEFT JOIN racing_data.p_horse_speed_rating E
+ON A.HorseId = E.HorseId
+WHERE A.HorseId IS NOT NULL
+AND LoadDate = CURDATE()
+ORDER BY STR_TO_DATE(LEFT(StartTime,11),'%d-%b-%Y') DESC, Track ASC, RaceNumber ASC, CAST(HorseBarrier AS UNSIGNED) ASC
+"""
+cursor.execute(SQL_statement)
+db.commit()
+
+# insert into model history table
+SQL_statement = """
+INSERT INTO racing_data.p_model_data
+SELECT * FROM racing_data.p_model_data_temp"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
+# create next day odds meet list for scraping
+print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Creating 'next day' odds meet list for scraping..")
+
+# drop old next day odds meet list table
+SQL_statement = """DROP TABLE IF EXISTS racing_data.p_next_day_odds_race_list"""
+cursor.execute(SQL_statement)
+db.commit()
+
+# create next day odds meet list table
+SQL_statement = """
+CREATE TABLE racing_data.p_next_day_odds_race_list AS
+SELECT * FROM (
+                  SELECT DISTINCT STR_TO_DATE(LEFT(MeetingDate, INSTR(MeetingDate, ' ')), '%d/%c/%Y') AS MeetingDate,
+                                  RaceNumber,
+                                  REPLACE(Track,' ','-') AS Track
+                  FROM racing_data.p_forms_future
+              ) A
+#WHERE  MeetingDate = CURDATE() + 1
+WHERE MeetingDate = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+ORDER BY MeetingDate DESC, Track, CAST(RaceNumber AS SIGNED) ASC"""
+cursor.execute(SQL_statement)
+db.commit()
+
+########################################################################################################################
+
 print(datetime.now().strftime("%d.%b %Y %H:%M:%S") + " ** Processing complete")
